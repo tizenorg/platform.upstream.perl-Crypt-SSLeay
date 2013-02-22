@@ -11,6 +11,12 @@ extern "C" {
 #endif
 #include "EXTERN.h"
 #include "perl.h"
+
+/* CRYPT_SSLEAY_free() will not be #defined to be free() now that we're no
+ * longer supporting pre-2000 OpenSSL.
+#define NO_XSLOCKS
+*/
+
 #include "XSUB.h"
 
 /* build problem under openssl 0.9.6 and some builds of perl 5.8.x */
@@ -18,11 +24,21 @@ extern "C" {
 #define PERL5 1
 #endif
 
-/* ssl.h or openssl/ssl.h is included from the crypt_ssleay_version
- * file which is written when building with perl Makefile.PL
- * #include "ssl.h"
- */
-#include "crypt_ssleay_version.h"
+/* Makefile.PL no longer generates the following header file
+ * #include "crypt_ssleay_version.h"
+ * Among other things, Makefile.PL used to determine whether
+ * to use #include<openssl/ssl.h> or #include<ssl.h> and
+ * whether to use OPENSSL_free or free etc, but such distinctions
+ * ceased to matter pre-2000. Crypt::SSLeay no longer supports
+ * pre-2000 OpenSSL */
+
+#include <openssl/ssl.h>
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/rand.h>
+#include <openssl/pkcs12.h>
+
+#define CRYPT_SSLEAY_free OPENSSL_free
 
 #undef Free /* undo namespace pollution from crypto.h */
 #ifdef __cplusplus
@@ -30,15 +46,11 @@ extern "C" {
 #endif
 
 
-/* moved this out to Makefile.PL so user can 
- * see value being used printed during build
- * #if SSLEAY_VERSION_NUMBER >= 0x0900
- * #define CRYPT_SSL_CLIENT_METHOD SSLv3_client_method()
- * #else
- * #define CRYPT_SSL_CLIENT_METHOD SSLv2_client_method()
- * #endif
- */
-
+#if SSLEAY_VERSION_NUMBER >= 0x0900
+#define CRYPT_SSL_CLIENT_METHOD SSLv3_client_method()
+#else
+#define CRYPT_SSL_CLIENT_METHOD SSLv2_client_method()
+#endif
 
 static void InfoCallback(const SSL *s,int where,int ret)
     {
@@ -129,9 +141,15 @@ SSL_CTX_new(packname, ssl_version)
             ctx = SSL_CTX_new(SSLv3_client_method());
         }
         else {
-            /* v2 is the default */
+#ifndef OPENSSL_NO_SSL2 
+            /* v2 is the default */ 
             ctx = SSL_CTX_new(SSLv2_client_method());
+#else 
+            /* v3 is the default */
+            ctx = SSL_CTX_new(SSLv3_client_method());
+#endif
         }                
+
         SSL_CTX_set_options(ctx,SSL_OP_ALL|0);
         SSL_CTX_set_default_verify_paths(ctx);
         SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
@@ -282,7 +300,7 @@ SSL_write(ssl, buf, ...)
            STRLEN blen;
            int len;
            int offset = 0;
-           int n;
+           int keep_trying_to_write = 1;
         INPUT:
            char* buf = SvPV(ST(1), blen);
         CODE:
@@ -304,12 +322,34 @@ SSL_write(ssl, buf, ...)
            else {
                len = blen;
            }
-           n = SSL_write(ssl, buf+offset, len);
-           if (n >= 0) {
-               RETVAL = newSViv(n);
-           }
-           else {
-               RETVAL = &PL_sv_undef;
+
+           /* try to handle incomplete writes properly
+            * see RT bug #64054 and RT bug #78695
+            * 2012/08/02: Stop trying to distinguish between good & bad
+            * zero returns from underlying SSL_read/SSL_write
+            */
+           while (keep_trying_to_write)
+           {
+                int n = SSL_write(ssl, buf+offset, len);
+                int x = SSL_get_error(ssl, n);
+                
+                if ( n >= 0 )
+                {
+                    keep_trying_to_write = 0;
+                    RETVAL = newSViv(n);
+                }
+                else
+                {
+                    if 
+                    (
+                        (x != SSL_ERROR_WANT_READ) &&
+                        (x != SSL_ERROR_WANT_WRITE)
+                    )
+                    {
+                        keep_trying_to_write = 0;
+                        RETVAL = &PL_sv_undef;
+                    }
+                }
            }
         OUTPUT:
            RETVAL
@@ -322,7 +362,7 @@ SSL_read(ssl, buf, len,...)
            char *buf;
            STRLEN blen;
            int offset = 0;
-           int n;
+           int keep_trying_to_read = 1;
         INPUT:
            SV* sv = ST(1);
         CODE:
@@ -349,15 +389,34 @@ SSL_read(ssl, buf, len,...)
            SvGROW(sv, offset + len + 1);
            buf = SvPVX(sv);  /* it might have been relocated */
 
-           n = SSL_read(ssl, buf+offset, len);
+           /* try to handle incomplete writes properly
+            * see RT bug #64054 and RT bug #78695
+            * 2012/08/02: Stop trying to distinguish between good & bad
+            * zero returns from underlying SSL_read/SSL_write
+            */
+           while (keep_trying_to_read) {
+                int n = SSL_read(ssl, buf+offset, len);
+                int x = SSL_get_error(ssl, n);
 
-           if (n >= 0) {
-               SvCUR_set(sv, offset + n);
-               buf[offset + n] = '\0';
-               RETVAL = newSViv(n);
-           }
-           else {
-               RETVAL = &PL_sv_undef;
+                if ( n >= 0 )
+                {
+                    SvCUR_set(sv, offset + n);
+                    buf[offset + n] = '\0';
+                    keep_trying_to_read = 0;
+                    RETVAL = newSViv(n);
+                }
+                else
+                {
+                    if
+                    ( 
+                        (x != SSL_ERROR_WANT_READ) && 
+                        (x != SSL_ERROR_WANT_WRITE) 
+                    ) 
+                    {
+                        keep_trying_to_read = 0;
+                        RETVAL = &PL_sv_undef;
+                    }
+                }
            }
         OUTPUT:
            RETVAL
@@ -391,6 +450,15 @@ SSL_get_cipher(ssl)
            RETVAL = (char*) SSL_get_cipher(ssl);
         OUTPUT:
            RETVAL        
+
+#if OPENSSL_VERSION_NUMBER >= 0x0090806fL && !defined(OPENSSL_NO_TLSEXT)
+
+void
+SSL_set_tlsext_host_name(ssl, name)
+        SSL *ssl
+        const char *name
+
+#endif
 
 MODULE = Crypt::SSLeay        PACKAGE = Crypt::SSLeay::X509        PREFIX = X509_
 

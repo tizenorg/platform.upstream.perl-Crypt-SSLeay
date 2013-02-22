@@ -2,7 +2,7 @@ Changes
 MANIFEST
 MANIFEST.SKIP
 Makefile.PL
-README
+README.md
 SSLeay.pm
 SSLeay.xs
 TODO
@@ -22,3 +22,5 @@ t/00-basic.t
 t/01-connect.t
 t/02-live.t
 META.yml                                 Module meta-data (added by MakeMaker)
+
+META.json                                Module JSON meta-data (added by MakeMaker)

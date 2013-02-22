@@ -1,6 +1,64 @@
 Revision history for Crypt-SSLeay
 =================================
 
+0.64 2012-08-06 01:23:30
+
+- Drastically simplify Makefile.PL to resolve RT bugs #61249, #61324,
+  #63553, #68208, and #68084.
+
+- Forgot to update Changes for 0.63, so this version overrides that.
+
+
+0.61_05 2012-08-04 00:40:22 UTC
+
+- Trying to distinguish between good vs bad zero returns from underlying
+  SSL_read/SSL_write broke stuff (see RT bug #78695). Revert to previous
+  behavior.
+
+- Completely re-organize Makefile.PL. I hope these changes will help take
+  care of RT bugs #61324, #61249, #63553, and #68084 etc. This is not
+  necessarily finished, but I want to see what happens on CPAN Testers at
+  this point before making a few other minor changes.
+
+0.60 2012-07-29 21:43:47 UTC
+
+- Release 0.59_03 as 0.60 so distributions can pick up various fixes. The most
+  important one seems to be bug RT #70565. This should take care of bug RT
+  #77167
+
+- SSL_read and SSL_write now try to handle incomplete reads/writes (see bug RT
+  RT #64054). The current test suite does is not very comprehensive, so caution
+  is recommended at this point. Also, if you have good test cases, I would love
+  to incorporate them into the distribution.
+
+0.59_03 2012-03-10 00:45:28 UTC
+
+- Bump version number and upload to CPAN.
+
+
+0.59_02 2012-03-08 16:16:03 UTC
+
+- Forgot to update Changes for 0.59_01. The following is a combined list of
+  the more important fixes incorporated in both.
+
+- Bug RT #64054: Handle incomplete reads/writes better
+
+- Bug RT #73754: Add LWP::Protocol::https to PREREQ_PM
+
+- Bug RT #73755: Crypt-SSLeay does not verify hosts (yet). Don't let that
+  cause a failure during tests.
+
+- Streamline t/02-live.t using Try::Tiny and done_testing
+
+- Plus assorted related small changes.
+
+0.58_01 2010-09-08 19:11:39 UTC
+
+- L<text|scheme:...> is not supported in POD for 5.8.5 and earlier.
+- TODOs in POD should stand out
+- Add /boot/common/ssl and some other directories to unix_ssl_dirs (see bug
+  #60936).
+
 0.58 2010-08-25 14:06:30 UTC
 
 - Bump version number for Crypt::SSLeay to 0.58 and Net::SSL to 2.85 in
@@ -15,10 +73,10 @@ Revision history for Crypt-SSLeay
 - Fix for NO_PROXY support in Net::SSL (bug #57836)
 - Bump Net::SSL version number to 2.84_02 after changes
 - Fix file/dir permissions (bug #60338)
-- Review warnings when compiling SSLeay.xs against older versions of OpenSSL.
-  Warnings are due to OpenSSL.
-- Add clarification regarding $ENV{HTTPS_CA_FILE} and $ENV{HTTPS_CA_DIR} to the
-  POD.
+- Review warnings when compiling SSLeay.xs against older versions of
+  OpenSSL: Warnings are due to OpenSSL.
+- Add clarification regarding $ENV{HTTPS_CA_FILE} and $ENV{HTTPS_CA_DIR} to
+  the POD.
 - Other POD related changes: 
     * Remove historic information in README about platforms where the package
       was successfully built.
