@@ -1,3 +1,6 @@
+* Mon Mar 04 2013 Patrick McCarty <patrick.mccarty@linux.intel.com> 30ca3bf
+- Remove trailing slash in proxy
+
 * Thu Feb 21 2013 Anas Nashif <anas.nashif@intel.com> upstream/0.64@d523f2e
 - Initial import
 
