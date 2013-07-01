@@ -28,6 +28,7 @@ Group:          Development/Perl
 Url:            http://search.cpan.org/dist/Crypt-SSLeay/
 #Source:         http://www.cpan.org/authors/id/N/NA/NANIS/Crypt-SSLeay-0.58.tar.gz
 Source:         %{cpan_name}-%{version}.tar.gz
+Source1001: 	perl-Crypt-SSLeay.manifest
 BuildRequires:  perl
 BuildRequires:  perl-macros
 BuildRequires:  perl(MIME::Base64)
@@ -55,6 +56,7 @@ the LWP (libwww-perl) libraries.
 
 %prep
 %setup -q -n %{cpan_name}-%{version}
+cp %{SOURCE1001} .
 ### rpmlint
 # wrong-file-end-of-line-encoding
 %{__perl} -pi -e 's|\r\n|\n|' README
@@ -74,6 +76,7 @@ export CRYPT_SSLEAY_DEFAULT=/usr
 
 
 %files -f %{name}.files
+%manifest %{name}.manifest
 %defattr(-,root,root,-)
 
 %changelog
